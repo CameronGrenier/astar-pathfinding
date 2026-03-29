@@ -19,12 +19,12 @@ A multi-agent A\* pathfinding simulator built in C with real-time ncurses visual
 
 ### Prerequisites
 
-| Dependency | Notes |
-|---|---|
-| C compiler | `clang` (default) or `gcc` |
-| ncurses | Terminal UI library — pre-installed on macOS; `libncurses-dev` on Debian/Ubuntu |
-| pthreads | POSIX threads — available on macOS and Linux |
-| make | Build automation |
+| Dependency | Notes                                                                           |
+| ---------- | ------------------------------------------------------------------------------- |
+| C compiler | `clang` (default) or `gcc`                                                      |
+| ncurses    | Terminal UI library — pre-installed on macOS; `libncurses-dev` on Debian/Ubuntu |
+| pthreads   | POSIX threads — available on macOS and Linux                                    |
+| make       | Build automation                                                                |
 
 > **Platform:** macOS and Linux. Not tested on Windows.
 
@@ -71,12 +71,12 @@ Examples:
 
 ### Speed options
 
-| Name | Delay per step | `usleep` value |
-|---|---|---|
-| `slow` | 500 ms | 500 000 µs |
-| `medium` | 100 ms | 100 000 µs |
-| `fast` | 20 ms | 20 000 µs |
-| `realtime` | 0 ms | 0 µs |
+| Name       | Delay per step | `usleep` value |
+| ---------- | -------------- | -------------- |
+| `slow`     | 500 ms         | 500 000 µs     |
+| `medium`   | 100 ms         | 100 000 µs     |
+| `fast`     | 20 ms          | 20 000 µs      |
+| `realtime` | 0 ms           | 0 µs           |
 
 When using CLI arguments, the first run uses the provided file and speed. If you choose **Run again** from the results screen, the interactive menu appears for subsequent runs.
 
@@ -100,7 +100,7 @@ Input files are plain text with the following structure:
 ```
 
 - **Rows/Cols** — grid dimensions (height × width)
-- **num\_agents** — number of agents in the simulation
+- **num_agents** — number of agents in the simulation
 - **Agent positions** — one `x y` pair per line, zero-indexed from bottom-left
 - **Goal position** — single `x y` pair, the shared destination for all agents
 - **Grid** — `rows` lines of `cols` characters each: `0` = empty, `1` = obstacle. Listed top-to-bottom visually (row `rows-1` first, row `0` last)
@@ -127,15 +127,15 @@ This defines an 8×10 grid with 2 agents starting at `(2,1)` and `(8,2)`, headin
 
 ### Included test files
 
-| File | Grid | Agents | Description |
-|---|---|---|---|
-| `input/small_open.txt` | 5×5 | 1 | Completely open grid — agent at `(0,0)`, goal at `(4,4)` |
-| `input/small_maze.txt` | 6×6 | 1 | Small maze with walls — agent at `(0,0)`, goal at `(5,5)` |
-| `input/input.txt` | 8×10 | 2 | Two agents with scattered wall clusters |
-| `input/medium_two_agents.txt` | 12×16 | 2 | Two agents on a medium grid with rectangular wall structures |
-| `input/medium_four_agents.txt` | 14×14 | 4 | Four agents in corners converging on centre goal `(7,7)` |
-| `input/large_sparse.txt` | 20×30 | 3 | Large grid with sparse rectangular obstacles |
-| `input/large_dense.txt` | 20×20 | 4 | Large densely-walled maze; four agents from corners to centre `(9,9)` |
+| File                           | Grid  | Agents | Description                                                           |
+| ------------------------------ | ----- | ------ | --------------------------------------------------------------------- |
+| `input/small_open.txt`         | 5×5   | 1      | Completely open grid — agent at `(0,0)`, goal at `(4,4)`              |
+| `input/small_maze.txt`         | 6×6   | 1      | Small maze with walls — agent at `(0,0)`, goal at `(5,5)`             |
+| `input/input.txt`              | 8×10  | 2      | Two agents with scattered wall clusters                               |
+| `input/medium_two_agents.txt`  | 12×16 | 2      | Two agents on a medium grid with rectangular wall structures          |
+| `input/medium_four_agents.txt` | 14×14 | 4      | Four agents in corners converging on centre goal `(7,7)`              |
+| `input/large_sparse.txt`       | 20×30 | 3      | Large grid with sparse rectangular obstacles                          |
+| `input/large_dense.txt`        | 20×20 | 4      | Large densely-walled maze; four agents from corners to centre `(9,9)` |
 
 ---
 
@@ -166,14 +166,14 @@ input/            Test input files
 
 ### `include/types.h` — Core data types
 
-| Type | Purpose |
-|---|---|
-| `NodeType` | Enum: `EMPTY`, `OBSTACLE`, `AGENT`, `GOAL` |
-| `Coords` | 2D grid coordinates `{ x, y }` |
-| `Node` | Grid cell with `NodeType`, four cardinal neighbour pointers, and `Coords` |
-| `Agent` | Agent with `id`, `start_node` pointer into `actual_map`, dynamic `path_history` array, `path_len`, and `path_cap` |
-| `Zone` | Map region with `id`, `pthread_mutex_t`, `pthread_cond_t`, and `top_left`/`bottom_right` bounds |
-| `SimConfig` | Aggregates all simulation state: both maps, agents, goal, zones, and dimensions |
+| Type        | Purpose                                                                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| `NodeType`  | Enum: `EMPTY`, `OBSTACLE`, `AGENT`, `GOAL`                                                                        |
+| `Coords`    | 2D grid coordinates `{ x, y }`                                                                                    |
+| `Node`      | Grid cell with `NodeType`, four cardinal neighbour pointers, and `Coords`                                         |
+| `Agent`     | Agent with `id`, `start_node` pointer into `actual_map`, dynamic `path_history` array, `path_len`, and `path_cap` |
+| `Zone`      | Map region with `id`, `pthread_mutex_t`, `pthread_cond_t`, and `top_left`/`bottom_right` bounds                   |
+| `SimConfig` | Aggregates all simulation state: both maps, agents, goal, zones, and dimensions                                   |
 
 ### `src/map.c` — Map initialization
 
@@ -204,12 +204,12 @@ input/            Test input files
 
 A dynamically-sized min-heap backing the A\* open set:
 
-| Function | Behaviour |
-|---|---|
-| [`heap_create()`](src/heap.c:11) | Allocates initial array of `AStarNode`; returns `{NULL, 0, 0}` on failure |
-| [`heap_push()`](src/heap.c:24) | Inserts a node and swims up to restore the heap property; doubles capacity when full |
-| [`heap_pop()`](src/heap.c:50) | Removes and returns the minimum-`f` node; sinks down to restore order; halves capacity below 25% usage |
-| [`heap_free()`](src/heap.c:97) | Frees the backing array and resets fields |
+| Function                         | Behaviour                                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [`heap_create()`](src/heap.c:11) | Allocates initial array of `AStarNode`; returns `{NULL, 0, 0}` on failure                              |
+| [`heap_push()`](src/heap.c:24)   | Inserts a node and swims up to restore the heap property; doubles capacity when full                   |
+| [`heap_pop()`](src/heap.c:50)    | Removes and returns the minimum-`f` node; sinks down to restore order; halves capacity below 25% usage |
+| [`heap_free()`](src/heap.c:97)   | Frees the backing array and resets fields                                                              |
 
 ### `src/runner.c` — Agent thread logic
 
@@ -233,12 +233,12 @@ The agent loops until it reaches the goal node.
 
 - Initializes ncurses with colour pairs for each cell type:
 
-  | Cell type | Appearance |
-  |---|---|
-  | Empty | Dim ` . ` on default background |
-  | Obstacle | Solid white block |
-  | Agent | White `A` on red background |
-  | Goal | Black `G` on green background |
+  | Cell type | Appearance                    |
+  | --------- | ----------------------------- |
+  | Empty     | Dim `.` on default background |
+  | Obstacle  | Solid white block             |
+  | Agent     | White `A` on red background   |
+  | Goal      | Black `G` on green background |
 
 - Renders the initial `shared_map` state, then enters an event loop:
   - Sleeps on `cli_cond` until `cli_update_seq` changes (an agent moved) or `cli_done` is set
@@ -328,19 +328,19 @@ This ensures no other agent can observe a partially-completed move.
 
 Two types of condition variables coordinate the threads:
 
-| Condition variable | Purpose |
-|---|---|
+| Condition variable         | Purpose                                                                                                                                                                                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `zone.cond` (one per zone) | Agent-to-agent signalling. When an agent completes a move, it signals every locked zone's `cond`, waking any agents that were blocked waiting for that zone to change. A blocked agent calls `pthread_cond_wait` and then replans its path |
-| `cli_cond` (global) | Agent-to-CLI signalling. After each move, the agent increments `cli_update_seq` and signals `cli_cond`, telling the rendering thread to redraw |
+| `cli_cond` (global)        | Agent-to-CLI signalling. After each move, the agent increments `cli_update_seq` and signals `cli_cond`, telling the rendering thread to redraw                                                                                             |
 
 ### Atomic variables
 
 Lock-free coordination between threads uses `<stdatomic.h>`:
 
-| Variable | Type | Purpose |
-|---|---|---|
-| `cli_done` | `volatile atomic_int` | Set to `1` by main thread when all agents have finished; tells the CLI thread to exit |
-| `cli_update_seq` | `atomic_uint` | Monotonically increasing sequence number incremented on each agent move. The CLI thread compares its last-rendered sequence against the current value to detect pending redraws without holding locks |
+| Variable         | Type                  | Purpose                                                                                                                                                                                               |
+| ---------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cli_done`       | `volatile atomic_int` | Set to `1` by main thread when all agents have finished; tells the CLI thread to exit                                                                                                                 |
+| `cli_update_seq` | `atomic_uint`         | Monotonically increasing sequence number incremented on each agent move. The CLI thread compares its last-rendered sequence against the current value to detect pending redraws without holding locks |
 
 ---
 

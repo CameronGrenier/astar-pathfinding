@@ -18,12 +18,13 @@ extern unsigned int speed_delay;
  */
 static void append_path(Agent *agent, Coords pos)
 {
-    if (agent->path_len >= agent->path_cap) {
-        agent->path_cap = agent->path_cap == 0 ? 64 : agent->path_cap * 2;
-        agent->path_history = realloc(agent->path_history,
-                                      (size_t)agent->path_cap * sizeof(Coords));
-    }
-    agent->path_history[agent->path_len++] = pos;
+  if (agent->path_len >= agent->path_cap)
+  {
+    agent->path_cap = agent->path_cap == 0 ? 64 : agent->path_cap * 2;
+    agent->path_history = realloc(agent->path_history,
+                                  (size_t)agent->path_cap * sizeof(Coords));
+  }
+  agent->path_history[agent->path_len++] = pos;
 }
 
 /* -- zone helpers ----------------------------------------------------- */
@@ -50,8 +51,10 @@ static int pos_in_zone(Zone *zone, Coords pos)
 static int find_zones(Coords pos, Zone *out_zones[4])
 {
   int count = 0;
-  for (int i = 0; i < num_zones && count < 4; i++) {
-    if (pos_in_zone(&zones[i], pos)) {
+  for (int i = 0; i < num_zones && count < 4; i++)
+  {
+    if (pos_in_zone(&zones[i], pos))
+    {
       out_zones[count++] = &zones[i];
     }
   }
@@ -76,21 +79,31 @@ static int collect_zones(Coords cur_pos, Coords next_pos, Zone *out_zones[8])
   int nn = find_zones(next_pos, nxt_z);
 
   int total = 0;
-  for (int i = 0; i < nc; i++) out_zones[total++] = cur_z[i];
-  for (int i = 0; i < nn; i++) {
+  for (int i = 0; i < nc; i++)
+    out_zones[total++] = cur_z[i];
+  for (int i = 0; i < nn; i++)
+  {
     /* deduplicate */
     int dup = 0;
-    for (int j = 0; j < total; j++) {
-      if (out_zones[j]->id == nxt_z[i]->id) { dup = 1; break; }
+    for (int j = 0; j < total; j++)
+    {
+      if (out_zones[j]->id == nxt_z[i]->id)
+      {
+        dup = 1;
+        break;
+      }
     }
-    if (!dup) out_zones[total++] = nxt_z[i];
+    if (!dup)
+      out_zones[total++] = nxt_z[i];
   }
 
   /* insertion sort by zone id (ascending) — at most 8 elements */
-  for (int i = 1; i < total; i++) {
+  for (int i = 1; i < total; i++)
+  {
     Zone *tmp = out_zones[i];
     int j = i - 1;
-    while (j >= 0 && out_zones[j]->id > tmp->id) {
+    while (j >= 0 && out_zones[j]->id > tmp->id)
+    {
       out_zones[j + 1] = out_zones[j];
       j--;
     }
@@ -104,7 +117,8 @@ static int collect_zones(Coords cur_pos, Coords next_pos, Zone *out_zones[8])
  */
 static void lock_zones(Zone *zs[], int n)
 {
-  for (int i = 0; i < n; i++) pthread_mutex_lock(&zs[i]->mutex);
+  for (int i = 0; i < n; i++)
+    pthread_mutex_lock(&zs[i]->mutex);
 }
 
 /**
@@ -112,7 +126,8 @@ static void lock_zones(Zone *zs[], int n)
  */
 static void unlock_zones(Zone *zs[], int n)
 {
-  for (int i = n - 1; i >= 0; i--) pthread_mutex_unlock(&zs[i]->mutex);
+  for (int i = n - 1; i >= 0; i--)
+    pthread_mutex_unlock(&zs[i]->mutex);
 }
 
 /**
@@ -120,7 +135,8 @@ static void unlock_zones(Zone *zs[], int n)
  */
 static void signal_zones(Zone *zs[], int n)
 {
-  for (int i = 0; i < n; i++) pthread_cond_signal(&zs[i]->cond);
+  for (int i = 0; i < n; i++)
+    pthread_cond_signal(&zs[i]->cond);
 }
 
 int within_zone(Zone *zone, Node *node)
@@ -139,10 +155,12 @@ void *runner(void *arg)
   /* record starting position */
   append_path(agent, current_node->pos);
 
-  while (!nodes_equal(current_node, goal_node)) {
-    if (next_moves == NULL) {
-        next_moves = a_star(current_node);
-        continue;
+  while (!nodes_equal(current_node, goal_node))
+  {
+    if (next_moves == NULL)
+    {
+      next_moves = a_star(current_node);
+      continue;
     }
 
     int moved = 0;
@@ -173,10 +191,16 @@ void *runner(void *arg)
       {
         /* only validate nodes that fall within at least one of our locked zones */
         int in_locked = 0;
-        for (int z = 0; z < nlocked; z++) {
-          if (within_zone(locked[z], check->node)) { in_locked = 1; break; }
+        for (int z = 0; z < nlocked; z++)
+        {
+          if (within_zone(locked[z], check->node))
+          {
+            in_locked = 1;
+            break;
+          }
         }
-        if (!in_locked) break; /* outside our locked region — stop checking */
+        if (!in_locked)
+          break; /* outside our locked region — stop checking */
 
         NodeType type = shared_map[check->node->pos.y][check->node->pos.x].type;
         if (type == OBSTACLE || type == AGENT)

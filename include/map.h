@@ -10,7 +10,7 @@
  * partitions the map into zones with their synchronization primitives.
  *
  * actual_map reflects ground truth and is never modified after init.
- * shared_map starts with only agent positions and the goal. 
+ * shared_map starts with only agent positions and the goal.
  * Obstacles are discovered and added at runtime by agents.
  *
  * @param config  Pointer to SimConfig struct to populate

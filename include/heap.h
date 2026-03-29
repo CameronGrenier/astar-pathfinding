@@ -8,7 +8,8 @@
  * Backed by a dynamically resizing array.
  * Doubles in capacity when full, halves when quarter full.
  */
-typedef struct {
+typedef struct
+{
     AStarNode *data; /**< Dynamically allocated array of AStarNodes */
     int size;        /**< Current number of elements in the heap */
     int capacity;    /**< Current allocated capacity of the array */
