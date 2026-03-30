@@ -3,6 +3,41 @@
 #include <stdlib.h>
 #include <math.h>
 
+static void skip_comments(FILE *f)
+{
+	int c;
+	while ((c = fgetc(f)) != EOF)
+	{
+		if (c == '/')
+		{
+			int next = fgetc(f);
+			if (next == '/')
+			{
+				// discard rest of line
+				while ((c = fgetc(f)) != EOF && c != '\n')
+					;
+				continue;
+			}
+			else
+			{
+				// not a comment, push both chars back
+				ungetc(next, f);
+				ungetc(c, f);
+				return;
+			}
+		}
+		else if (c == ' ' || c == '\t' || c == '\r' || c == '\n')
+		{
+			continue; // skip whitespace
+		}
+		else
+		{
+			ungetc(c, f);
+			return;
+		}
+	}
+}
+
 void init(SimConfig *config, const char *input_file)
 {
 	// open file and check for errors
@@ -14,10 +49,13 @@ void init(SimConfig *config, const char *input_file)
 	}
 
 	// read grid dimensions
+	skip_comments(file);
 	fscanf(file, "%d", &config->rows);
+	skip_comments(file);
 	fscanf(file, "%d", &config->cols);
 
 	// read number of agents and allocate agent array
+	skip_comments(file);
 	fscanf(file, "%d", &config->num_agents);
 	config->agents = (Agent *)malloc(config->num_agents * sizeof(Agent));
 
@@ -26,7 +64,9 @@ void init(SimConfig *config, const char *input_file)
 	for (int i = 0; i < config->num_agents; i++)
 	{
 		int x, y;
+		skip_comments(file);
 		fscanf(file, "%d", &x);
+		skip_comments(file);
 		fscanf(file, "%d", &y);
 		config->agents[i] = (Agent){i, NULL, NULL, 0, 0};
 		start_positions[i] = (Coords){x, y};
@@ -34,7 +74,9 @@ void init(SimConfig *config, const char *input_file)
 
 	// read goal coordinates
 	int gx, gy;
+	skip_comments(file);
 	fscanf(file, "%d", &gx);
+	skip_comments(file);
 	fscanf(file, "%d", &gy);
 
 	// allocate actual_map as a 2D array — rows x cols
@@ -49,6 +91,7 @@ void init(SimConfig *config, const char *input_file)
 	for (int row = config->rows - 1; row >= 0; row--)
 	{
 		char line[1024];
+		skip_comments(file);
 		fscanf(file, "%1023s", line);
 		for (int col = 0; col < config->cols; col++)
 		{
