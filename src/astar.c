@@ -20,13 +20,15 @@ PathNode *a_star(Node *start_node)
    * We use chars for 0 and 1 rather than ints since chars are 4x more space efficient.
    */
   char *closed_set = (char *)calloc(cols * rows, sizeof(char));
-
-  /*
-   * came_from is a pseudo hashmap that uses node coordinates to index into the array
-   * ie. came_from[y * cols + x]. Node A with coordinates x, y has the *node from which the algorithm came from to
-   * discover A in came_from[y * cols + x].
-   */
   Node **came_from = (Node **)calloc(cols * rows, sizeof(Node *));
+  if (!closed_set || !came_from)
+  {
+    if (closed_set)
+      free(closed_set);
+    if (came_from)
+      free(came_from);
+    return NULL;
+  }
 
   /*
    * open_set is a minimum heap sorted by a nodes f cost which tracks all nodes in the algorithms frontier.
@@ -47,16 +49,26 @@ PathNode *a_star(Node *start_node)
     if (nodes_equal(curr.node, goal_node))
     {
       PathNode *prev_path_node = (PathNode *)malloc(sizeof(PathNode)); // keep track of the path head, we will be
+      if (!prev_path_node)
+        break;
       *prev_path_node = (PathNode){curr.node, NULL};
       Coords current_pos = curr.node->pos;
       while (!coords_equal(current_pos, start_node->pos))
       {
         // create a PathNode for the predecessor of the current node using the came_from hashmap
         PathNode *curr_path_node = (PathNode *)malloc(sizeof(PathNode));
+        if (!curr_path_node)
+        {
+          free_path(prev_path_node);
+          prev_path_node = NULL;
+          break;
+        }
         *curr_path_node = (PathNode){came_from[current_pos.y * cols + current_pos.x], prev_path_node};
         prev_path_node = curr_path_node;
         current_pos = curr_path_node->node->pos;
       }
+      if (!prev_path_node)
+        break;
       heap_free(&open_set);
       free(closed_set);
       free(came_from);
@@ -88,6 +100,10 @@ PathNode *a_star(Node *start_node)
       }
       if (shared_map[n->pos.y][n->pos.x].type == AGENT && !nodes_equal(n, goal_node))
       {
+        int g = curr.g + 10; // Add a higher cost for pathing through an agent
+        int f = g + manhattan_distance(n->pos, goal_node->pos);
+        heap_push(&open_set, (AStarNode){n, g, f});
+        came_from[n->pos.y * cols + n->pos.x] = curr.node;
         continue;
       }
       int g = curr.g + 1;

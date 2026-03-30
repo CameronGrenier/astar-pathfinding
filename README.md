@@ -6,6 +6,8 @@ A multi-agent A\* pathfinding simulator built in C with real-time ncurses visual
 
 - **Interactive ncurses menu** — ASCII art title screen, file picker, and speed selector
 - **Real-time grid visualization** — colour-coded terminal rendering updated on every agent move
+- **Dynamic map scaling and scrolling** — automatically scales down large maps to fit the terminal, with arrow key scrolling for maps that are still too large
+- **Random map generation** — generate random maps with configurable dimensions, obstacle density, and agent count
 - **Multiple simulation speeds** — slow, medium, fast, and realtime
 - **Multi-agent collision avoidance** — agents detect and wait for each other, then replan
 - **Runtime obstacle discovery** — agents only learn about obstacles when they encounter them
@@ -79,6 +81,22 @@ Examples:
 | `realtime` | 0 ms           | 0 µs           |
 
 When using CLI arguments, the first run uses the provided file and speed. If you choose **Run again** from the results screen, the interactive menu appears for subsequent runs.
+
+## Viewing Large Maps
+
+When a map is larger than the terminal window, the CLI automatically scales down the rendering to fit more cells on the screen. It will try to use 2 characters per cell, or 1 character per cell if necessary. If the map is still too large to fit on the screen even at the smallest scale, you can use the **Arrow Keys** to scroll the camera around the map in real-time.
+
+---
+
+## Random Map Generation
+
+You can generate random maps directly from the interactive menu. When selecting a file, choose the `[Generate Random Map]` option. You will be prompted to enter:
+
+- Map width and height
+- Number of agents
+- Obstacle density (percentage)
+
+The generated map will be saved to `input/random.txt` and automatically loaded for the simulation.
 
 ---
 
@@ -186,7 +204,7 @@ input/            Test input files
 5. **Links neighbours** — connects each node to its cardinal neighbours via pointers; boundary nodes get `NULL`
 6. **Sets goal and agent nodes** — marks the goal cell as `GOAL` on `actual_map` and points each agent's `start_node` to its position
 7. **Creates `shared_map`** — a separate 2D `Node` array initialized to `EMPTY` everywhere except agent and goal positions. This represents the agents' collective knowledge; obstacles are unknown until discovered
-8. **Partitions into zones** — computes `zone_size = round(sqrt(rows * cols))`, divides the map into a grid of zones, extends each zone's bounds by 25% overlap in every direction (clamped to map edges), and initializes a `mutex` and `cond` per zone
+8. **Partitions into zones** — computes `zone_size_x` and `zone_size_y` as 20% of the map dimensions, divides the map into a grid of zones, extends each zone's bounds by 25% overlap in every direction (clamped to map edges), and initializes a `mutex` and `cond` per zone
 
 ### `src/astar.c` — A\* pathfinding
 
@@ -300,7 +318,7 @@ The map is divided into a grid of rectangular **zones**, each with its own `pthr
 
 ### Why zones overlap (25%)
 
-Each zone's bounds are extended by 25% of `zone_size` in every direction. This overlap ensures that:
+Each zone's bounds are extended by 25% of its respective dimension (`zone_size_x` or `zone_size_y`) in every direction. This overlap ensures that:
 
 - An agent near a zone boundary has a consistent, locked view of all cells it might interact with
 - A single-cell move from one zone into the next is always covered by at least one zone containing both the source and destination cells
@@ -355,3 +373,36 @@ After all agents reach the goal, the simulation displays a results screen:
   - **Path** — full coordinate history as `(x,y)` pairs, wrapping to fit the terminal width
 - **Scrolling** — Up/Down arrows scroll if the content exceeds the terminal height
 - **Prompt** — `[R] Run again` returns to the interactive menu; `[Q] Quit` exits the program
+
+---
+
+## Testing
+
+### Unit Tests
+
+Compares agent paths against BFS-optimal shortest paths on 4 hand-crafted maps (1, 2, 3, and 4 agents):
+
+```bash
+make test
+```
+
+### Scalability Benchmark
+
+Runs 1,600 simulations across random maps (grid sizes 10×10 to 70×70, 1-8 agents, 100 iterations each). Results are saved to `tests/benchmark_results.csv`:
+
+```bash
+make benchmark
+```
+
+### Run Both
+
+```bash
+bash tests/run_tests.sh all
+```
+
+Or run them individually:
+
+```bash
+bash tests/run_tests.sh           # unit tests only
+bash tests/run_tests.sh benchmark # benchmark only
+```

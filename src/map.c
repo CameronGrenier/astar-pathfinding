@@ -3,8 +3,6 @@
 #include <stdlib.h>
 #include <math.h>
 
-extern int zone_size;
-
 void init(SimConfig *config, const char *input_file)
 {
 	// open file and check for errors
@@ -50,8 +48,8 @@ void init(SimConfig *config, const char *input_file)
 	// input rows are listed top to bottom (row rows-1 down to row 0)
 	for (int row = config->rows - 1; row >= 0; row--)
 	{
-		char line[256];
-		fscanf(file, "%s", line);
+		char line[1024];
+		fscanf(file, "%1023s", line);
 		for (int col = 0; col < config->cols; col++)
 		{
 			NodeType type = (line[col] == '1') ? OBSTACLE : EMPTY;
@@ -111,14 +109,24 @@ void init(SimConfig *config, const char *input_file)
 	// place goal on shared_map
 	config->shared_map[gy][gx].type = GOAL;
 
-	// calculate zone dimensions based on sqrt(rows * cols)
-	config->zone_size = (int)round(sqrt(config->rows * config->cols));
-	config->num_zones_x = (config->cols + zone_size - 1) / zone_size; // ceil division
-	config->num_zones_y = (config->rows + zone_size - 1) / zone_size;
+	// calculate zone dimensions based on 20% of total dimensions
+	config->zone_size_x = config->cols / 5;
+	if (config->zone_size_x < 1)
+		config->zone_size_x = 1;
+
+	config->zone_size_y = config->rows / 5;
+	if (config->zone_size_y < 1)
+		config->zone_size_y = 1;
+
+	int zsx = config->zone_size_x;
+	int zsy = config->zone_size_y;
+	config->num_zones_x = (config->cols + zsx - 1) / zsx; // ceil division
+	config->num_zones_y = (config->rows + zsy - 1) / zsy;
 	config->num_zones = config->num_zones_x * config->num_zones_y;
 
 	// 25% overlap in each direction
-	int overlap = config->zone_size / 4;
+	int overlap_x = zsx / 4;
+	int overlap_y = zsy / 4;
 
 	// allocate and init zones with overlapping bounds and synchronization primitives
 	config->zones = (Zone *)malloc(config->num_zones * sizeof(Zone));
@@ -130,16 +138,16 @@ void init(SimConfig *config, const char *input_file)
 			config->zones[idx].id = idx;
 
 			// base boundaries
-			int base_left = zx * zone_size;
-			int base_top = zy * zone_size;
-			int base_right = (zx + 1) * zone_size - 1;
-			int base_bottom = (zy + 1) * zone_size - 1;
+			int base_left = zx * zsx;
+			int base_top = zy * zsy;
+			int base_right = (zx + 1) * zsx - 1;
+			int base_bottom = (zy + 1) * zsy - 1;
 
 			// extend by overlap, clamped to map bounds
-			int left = base_left - overlap;
-			int top = base_top - overlap;
-			int right = base_right + overlap;
-			int bottom = base_bottom + overlap;
+			int left = base_left - overlap_x;
+			int top = base_top - overlap_y;
+			int right = base_right + overlap_x;
+			int bottom = base_bottom + overlap_y;
 			if (left < 0)
 				left = 0;
 			if (top < 0)

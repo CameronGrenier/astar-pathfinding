@@ -93,7 +93,7 @@ AStarNode heap_pop(MinHeap *heap)
   }
 
   // if heap is 1/4 its capacity shrink it
-  if (heap->size < 0.25 * heap->capacity)
+  if (heap->capacity > 32 && heap->size < 0.25 * heap->capacity)
   {
     AStarNode *temp_arr = (AStarNode *)realloc(heap->data, heap->capacity / 2 * sizeof(AStarNode));
     // check if reallocation was failed

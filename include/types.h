@@ -1,6 +1,7 @@
 #ifndef TYPES_H
 #define TYPES_H
 #include <pthread.h>
+#include <stdatomic.h>
 
 /**
  * @brief Represents the type of a node on the map.
@@ -36,7 +37,7 @@ typedef struct Coords
  */
 typedef struct Node
 {
-	NodeType type;
+	_Atomic NodeType type;
 	struct Node *up, *down, *left, *right;
 	Coords pos;
 } Node;
@@ -81,7 +82,8 @@ typedef struct
 	int num_agents;
 	Node *goal_node;
 	Zone *zones;
-	int zone_size;
+	int zone_size_x;
+	int zone_size_y;
 	int num_zones;
 	int num_zones_x;
 	int num_zones_y;

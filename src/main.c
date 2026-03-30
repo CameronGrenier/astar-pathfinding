@@ -20,13 +20,16 @@ Zone *zones;
 int rows, cols;
 int num_agents;
 int num_zones, num_zones_x, num_zones_y;
-int zone_size;
+int zone_size_x, zone_size_y;
 unsigned int speed_delay = 100000; /* default: medium (100ms per step) */
 
 pthread_mutex_t cli_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cli_cond = PTHREAD_COND_INITIALIZER;
 volatile atomic_int cli_done = 0;
 atomic_uint cli_update_seq = 0;
+
+pthread_mutex_t map_changed_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t map_changed_cond = PTHREAD_COND_INITIALIZER;
 
 /* -- colour pairs for the results screen ------------------------------ */
 #define RES_HEADER 10
@@ -294,7 +297,8 @@ int main(int argc, char *argv[])
 		num_agents = config.num_agents;
 		goal_node = config.goal_node;
 		zones = config.zones;
-		zone_size = config.zone_size;
+		zone_size_x = config.zone_size_x;
+		zone_size_y = config.zone_size_y;
 		num_zones = config.num_zones;
 		num_zones_x = config.num_zones_x;
 		num_zones_y = config.num_zones_y;
@@ -315,6 +319,11 @@ int main(int argc, char *argv[])
 
 		/* spawn one thread per agent */
 		pthread_t *threads = malloc((size_t)num_agents * sizeof(pthread_t));
+		if (!threads)
+		{
+			perror("Failed to allocate threads");
+			return 1;
+		}
 		for (int i = 0; i < num_agents; i++)
 		{
 			pthread_create(&threads[i], NULL, runner, &agents[i]);

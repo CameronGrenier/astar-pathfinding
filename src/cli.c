@@ -2,6 +2,8 @@
 #include <pthread.h>
 #include <stdatomic.h>
 #include <ncurses.h>
+#include <sys/time.h>
+#include <errno.h>
 
 extern Node **shared_map;
 extern int rows;
@@ -14,6 +16,9 @@ extern int cols;
 #define PAIR_GOAL 4
 #define PAIR_HEADER 5
 #define PAIR_LEGEND 6
+
+static int cam_x = 0;
+static int cam_y = 0;
 
 static void render_cli(void)
 {
@@ -43,37 +48,91 @@ static void render_cli(void)
 	attroff(COLOR_PAIR(PAIR_EMPTY));
 	printw("Empty");
 
-	for (int row = rows - 1; row >= 0; row--)
+	int term_rows, term_cols;
+	getmaxyx(stdscr, term_rows, term_cols);
+
+	int available_rows = term_rows - 3;
+	int available_cols = term_cols;
+
+	int cell_width = 3;
+	if (cols * 3 > available_cols || rows > available_rows)
 	{
-		for (int col = 0; col < cols; col++)
+		if (cols * 2 <= available_cols && rows <= available_rows)
 		{
-			NodeType type = shared_map[row][col].type;
-			int screen_row = rows - 1 - row + 3;
+			cell_width = 2;
+		}
+		else
+		{
+			cell_width = 1;
+		}
+	}
+
+	int visible_cols = available_cols / cell_width;
+	int visible_rows = available_rows;
+
+	if (cam_x < 0)
+		cam_x = 0;
+	if (cam_y < 0)
+		cam_y = 0;
+	if (cam_x > cols - visible_cols)
+		cam_x = cols - visible_cols;
+	if (cam_y > rows - visible_rows)
+		cam_y = rows - visible_rows;
+	if (cam_x < 0)
+		cam_x = 0;
+	if (cam_y < 0)
+		cam_y = 0;
+
+	for (int row = 0; row < visible_rows; row++)
+	{
+		int map_row = rows - 1 - (cam_y + row);
+		if (map_row < 0 || map_row >= rows)
+			continue;
+
+		for (int col = 0; col < visible_cols; col++)
+		{
+			int map_col = cam_x + col;
+			if (map_col < 0 || map_col >= cols)
+				continue;
+
+			NodeType type = shared_map[map_row][map_col].type;
+			int screen_row = row + 3;
+			int screen_col = col * cell_width;
+
+			const char *str_empty = cell_width == 3 ? " . " : (cell_width == 2 ? " ." : ".");
+			const char *str_obs = cell_width == 3 ? "   " : (cell_width == 2 ? "  " : " ");
+			const char *str_agent = cell_width == 3 ? " A " : (cell_width == 2 ? " A" : "A");
+			const char *str_goal = cell_width == 3 ? " G " : (cell_width == 2 ? " G" : "G");
 
 			switch (type)
 			{
 			case EMPTY:
 				attron(COLOR_PAIR(PAIR_EMPTY));
-				mvprintw(screen_row, col * 3, " . ");
+				mvprintw(screen_row, screen_col, "%s", str_empty);
 				attroff(COLOR_PAIR(PAIR_EMPTY));
 				break;
 			case OBSTACLE:
 				attron(COLOR_PAIR(PAIR_OBSTACLE));
-				mvprintw(screen_row, col * 3, "   ");
+				mvprintw(screen_row, screen_col, "%s", str_obs);
 				attroff(COLOR_PAIR(PAIR_OBSTACLE));
 				break;
 			case AGENT:
 				attron(COLOR_PAIR(PAIR_AGENT) | A_BOLD);
-				mvprintw(screen_row, col * 3, " A ");
+				mvprintw(screen_row, screen_col, "%s", str_agent);
 				attroff(COLOR_PAIR(PAIR_AGENT) | A_BOLD);
 				break;
 			case GOAL:
 				attron(COLOR_PAIR(PAIR_GOAL) | A_BOLD);
-				mvprintw(screen_row, col * 3, " G ");
+				mvprintw(screen_row, screen_col, "%s", str_goal);
 				attroff(COLOR_PAIR(PAIR_GOAL) | A_BOLD);
 				break;
 			}
 		}
+	}
+
+	if (cols > visible_cols || rows > visible_rows)
+	{
+		mvprintw(0, 20, " [Use Arrow Keys to Scroll] ");
 	}
 
 	refresh();
@@ -101,22 +160,60 @@ void *cli_runner(void *arg)
 	clear();
 	refresh();
 
+	nodelay(stdscr, TRUE);
+
 	unsigned int rendered_seq = atomic_load(&cli_update_seq);
 	render_cli();
 
 	for (;;)
 	{
-		pthread_mutex_lock(&cli_mutex);
-		while (!atomic_load(&cli_done) && atomic_load(&cli_update_seq) == rendered_seq)
+		int ch = getch();
+		int needs_render = 0;
+		if (ch != ERR)
 		{
-			pthread_cond_wait(&cli_cond, &cli_mutex);
+			if (ch == KEY_UP)
+			{
+				cam_y--;
+				needs_render = 1;
+			}
+			else if (ch == KEY_DOWN)
+			{
+				cam_y++;
+				needs_render = 1;
+			}
+			else if (ch == KEY_LEFT)
+			{
+				cam_x--;
+				needs_render = 1;
+			}
+			else if (ch == KEY_RIGHT)
+			{
+				cam_x++;
+				needs_render = 1;
+			}
+		}
+
+		pthread_mutex_lock(&cli_mutex);
+		while (!atomic_load(&cli_done) && atomic_load(&cli_update_seq) == rendered_seq && !needs_render)
+		{
+			struct timespec ts;
+			clock_gettime(CLOCK_REALTIME, &ts);
+			ts.tv_nsec += 50000000; // 50ms
+			if (ts.tv_nsec >= 1000000000)
+			{
+				ts.tv_sec += 1;
+				ts.tv_nsec -= 1000000000;
+			}
+			int rc = pthread_cond_timedwait(&cli_cond, &cli_mutex, &ts);
+			if (rc == ETIMEDOUT)
+				break;
 		}
 
 		unsigned int pending_seq = atomic_load(&cli_update_seq);
 		int done = atomic_load(&cli_done);
 		pthread_mutex_unlock(&cli_mutex);
 
-		if (pending_seq != rendered_seq)
+		if (pending_seq != rendered_seq || needs_render)
 		{
 			render_cli();
 			rendered_seq = pending_seq;

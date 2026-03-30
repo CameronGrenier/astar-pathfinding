@@ -10,7 +10,7 @@
 
 /* -- ASCII art title --------------------------------------------------- */
 static const char *TITLE[] = {
-    "█████╗ ███████╗████████╗ █████╗ ██████╗                                      ",
+    "█████╗ ███████╗████████╗ █████╗ ██████╗                                       ",
     "██╔══██╗██╔════╝╚══██╔══╝██╔══██╗██╔══██╗                                     ",
     "███████║███████╗   ██║   ███████║██████╔╝                                     ",
     "██╔══██║╚════██║   ██║   ██╔══██║██╔══██╗                                     ",
@@ -92,6 +92,63 @@ static void draw_box(int y, int x, int h, int w)
   attroff(COLOR_PAIR(C_BORDER));
 }
 
+#include <time.h>
+
+static void generate_random_map(const char *filepath, int rows, int cols, int num_agents)
+{
+  FILE *f = fopen(filepath, "w");
+  if (!f)
+    return;
+
+  fprintf(f, "%d %d\n", rows, cols);
+  fprintf(f, "%d\n", num_agents);
+
+  srand(time(NULL));
+
+  int *used = calloc(rows * cols, sizeof(int));
+
+  for (int i = 0; i < num_agents; i++)
+  {
+    int x, y;
+    do
+    {
+      x = rand() % cols;
+      y = rand() % rows;
+    } while (used[y * cols + x]);
+    used[y * cols + x] = 1;
+    fprintf(f, "%d %d\n", x, y);
+  }
+
+  int gx, gy;
+  do
+  {
+    gx = rand() % cols;
+    gy = rand() % rows;
+  } while (used[gy * cols + gx]);
+  used[gy * cols + gx] = 2;
+  fprintf(f, "%d %d\n", gx, gy);
+
+  for (int r = rows - 1; r >= 0; r--)
+  {
+    for (int c = 0; c < cols; c++)
+    {
+      if (used[r * cols + c])
+      {
+        fprintf(f, "0");
+      }
+      else
+      {
+        int is_obs = (rand() % 100) < 15;
+        fprintf(f, "%d", is_obs ? 1 : 0);
+      }
+    }
+    fprintf(f, "\n");
+  }
+
+  free(used);
+  fclose(f);
+}
+
 /* -- file picker ------------------------------------------------------- */
 static int collect_input_files(char files[][PATH_BUF], int max)
 {
@@ -126,9 +183,10 @@ static int collect_input_files(char files[][PATH_BUF], int max)
     strcpy(files[j + 1], tmp);
   }
 
-  /* append "[ custom path... ]" sentinel */
-  snprintf(files[count], PATH_BUF, "[ custom path... ]");
-  return count + 1;
+  /* append sentinels */
+  snprintf(files[count++], PATH_BUF, "[ custom path... ]");
+  snprintf(files[count++], PATH_BUF, "[ generate random map... ]");
+  return count;
 }
 
 static void pick_file(char *out)
@@ -195,6 +253,66 @@ static void pick_file(char *out)
         mvgetnstr(box_y + box_h - 2, box_x + 15, out, PATH_BUF - 1);
         noecho();
         curs_set(0);
+      }
+      else if (strcmp(files[sel], "[ generate random map... ]") == 0)
+      {
+        clear();
+        draw_title(1);
+        int r_box_w = 40;
+        int r_box_h = 6;
+        int r_box_y = TITLE_LINES + 3;
+        int r_box_x = (COLS - r_box_w) / 2;
+        draw_box(r_box_y, r_box_x, r_box_h, r_box_w);
+
+        attron(COLOR_PAIR(C_DIM));
+        mvprintw(r_box_y, r_box_x + 2, " Random Map Parameters ");
+
+        echo();
+        curs_set(1);
+
+        char rows_str[16] = {0}, cols_str[16] = {0}, agents_str[16] = {0};
+
+        mvprintw(r_box_y + 2, r_box_x + 2, "Rows: ");
+        mvgetnstr(r_box_y + 2, r_box_x + 8, rows_str, 15);
+
+        mvprintw(r_box_y + 3, r_box_x + 2, "Cols: ");
+        mvgetnstr(r_box_y + 3, r_box_x + 8, cols_str, 15);
+
+        mvprintw(r_box_y + 4, r_box_x + 2, "Agents: ");
+        mvgetnstr(r_box_y + 4, r_box_x + 10, agents_str, 15);
+
+        attroff(COLOR_PAIR(C_DIM));
+        noecho();
+        curs_set(0);
+
+        int r = atoi(rows_str);
+        int c = atoi(cols_str);
+        int a = atoi(agents_str);
+
+        if (r < 5)
+          r = 5;
+        if (r > 1000)
+          r = 1000;
+
+        if (c < 5)
+          c = 5;
+        if (c > 1000)
+          c = 1000;
+
+        if (a < 1)
+          a = 1;
+
+        int max_agents = (r * c) / 10;
+        if (max_agents > 100)
+          max_agents = 100;
+        if (max_agents < 1)
+          max_agents = 1;
+
+        if (a > max_agents)
+          a = max_agents;
+
+        generate_random_map("input/random.txt", r, c, a);
+        strcpy(out, "input/random.txt");
       }
       else
       {
@@ -280,6 +398,7 @@ void run_menu(char *filepath_out, unsigned int *speed_out)
   noecho();
   curs_set(0);
   keypad(stdscr, TRUE);
+  nodelay(stdscr, FALSE);
 
   start_color();
   use_default_colors();

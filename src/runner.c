@@ -4,11 +4,19 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#define REALTIME_TIMEOUT_US 5000 /* 5 ms — safety net for missed signals */
+
 extern Node **shared_map;
 extern Node *goal_node;
-extern int zone_size, num_zones_x, num_zones_y, num_zones;
+extern int zone_size_x, zone_size_y, num_zones_x, num_zones_y, num_zones;
 extern Zone *zones;
 extern unsigned int speed_delay;
+
+extern pthread_mutex_t map_changed_mutex;
+extern pthread_cond_t map_changed_cond;
+
+#include <time.h>
+#include <sys/time.h>
 
 /* -- path history helper ---------------------------------------------- */
 
@@ -20,9 +28,16 @@ static void append_path(Agent *agent, Coords pos)
 {
   if (agent->path_len >= agent->path_cap)
   {
-    agent->path_cap = agent->path_cap == 0 ? 64 : agent->path_cap * 2;
-    agent->path_history = realloc(agent->path_history,
-                                  (size_t)agent->path_cap * sizeof(Coords));
+    int new_cap = agent->path_cap == 0 ? 64 : agent->path_cap * 2;
+    Coords *new_hist = realloc(agent->path_history,
+                               (size_t)new_cap * sizeof(Coords));
+    if (new_hist == NULL)
+    {
+      perror("Failed to reallocate path_history");
+      return;
+    }
+    agent->path_cap = new_cap;
+    agent->path_history = new_hist;
   }
   agent->path_history[agent->path_len++] = pos;
 }
@@ -159,6 +174,19 @@ void *runner(void *arg)
   {
     if (next_moves == NULL)
     {
+      struct timespec ts;
+      clock_gettime(CLOCK_REALTIME, &ts);
+      unsigned int timeout_us = speed_delay ? speed_delay : REALTIME_TIMEOUT_US;
+      ts.tv_sec += timeout_us / 1000000;
+      ts.tv_nsec += (timeout_us % 1000000) * 1000;
+      if (ts.tv_nsec >= 1000000000)
+      {
+        ts.tv_sec += 1;
+        ts.tv_nsec -= 1000000000;
+      }
+      pthread_mutex_lock(&map_changed_mutex);
+      pthread_cond_timedwait(&map_changed_cond, &map_changed_mutex, &ts);
+      pthread_mutex_unlock(&map_changed_mutex);
       next_moves = a_star(current_node);
       continue;
     }
@@ -176,9 +204,37 @@ void *runner(void *arg)
       /* check if the immediate next cell is occupied by another agent */
       if (shared_map[next_move->node->pos.y][next_move->node->pos.x].type == AGENT)
       {
-        /* wait on the first locked zone's cond (we hold all locks) */
-        pthread_cond_wait(&locked[0]->cond, &locked[0]->mutex);
-        unlock_zones(locked, nlocked);
+        /* unlock all zones before waiting to avoid holding extra locks
+           (pthread_cond_wait only releases the one mutex it's given) */
+        Zone *wait_zone = NULL;
+        for (int z = 0; z < nlocked; z++)
+        {
+          if (within_zone(locked[z], next_move->node))
+          {
+            wait_zone = locked[z];
+            break;
+          }
+        }
+        if (wait_zone == NULL)
+          wait_zone = locked[0]; /* fallback, should not happen */
+
+        for (int z = nlocked - 1; z >= 0; z--)
+        {
+          if (locked[z] != wait_zone)
+            pthread_mutex_unlock(&locked[z]->mutex);
+        }
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        unsigned int timeout_us = speed_delay ? speed_delay : REALTIME_TIMEOUT_US;
+        ts.tv_sec += timeout_us / 1000000;
+        ts.tv_nsec += (timeout_us % 1000000) * 1000;
+        if (ts.tv_nsec >= 1000000000)
+        {
+          ts.tv_sec += 1;
+          ts.tv_nsec -= 1000000000;
+        }
+        pthread_cond_timedwait(&wait_zone->cond, &wait_zone->mutex, &ts);
+        pthread_mutex_unlock(&wait_zone->mutex);
         free_path(next_moves);
         next_moves = a_star(current_node);
         continue;
@@ -221,6 +277,11 @@ void *runner(void *arg)
       {
         shared_map[next_move->node->pos.y][next_move->node->pos.x].type = OBSTACLE;
         unlock_zones(locked, nlocked);
+
+        pthread_mutex_lock(&map_changed_mutex);
+        pthread_cond_broadcast(&map_changed_cond);
+        pthread_mutex_unlock(&map_changed_mutex);
+
         free_path(next_moves);
         next_moves = a_star(current_node);
       }
@@ -248,6 +309,10 @@ void *runner(void *arg)
 
         signal_zones(locked, nlocked);
         unlock_zones(locked, nlocked);
+
+        pthread_mutex_lock(&map_changed_mutex);
+        pthread_cond_broadcast(&map_changed_cond);
+        pthread_mutex_unlock(&map_changed_mutex);
 
         pthread_mutex_lock(&cli_mutex);
         atomic_fetch_add(&cli_update_seq, 1);
