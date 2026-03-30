@@ -149,7 +149,7 @@ This defines an 8×10 grid with 2 agents starting at `(2,1)` and `(8,2)`, headin
 | ------------------------------ | ----- | ------ | --------------------------------------------------------------------- |
 | `input/small_open.txt`         | 5×5   | 1      | Completely open grid — agent at `(0,0)`, goal at `(4,4)`              |
 | `input/small_maze.txt`         | 6×6   | 1      | Small maze with walls — agent at `(0,0)`, goal at `(5,5)`             |
-| `input/input.txt`              | 8×10  | 2      | Two agents with scattered wall clusters                               |
+| `input/input.txt`              | 8×10  | 2      | Given example problem clusters                                        |
 | `input/medium_two_agents.txt`  | 12×16 | 2      | Two agents on a medium grid with rectangular wall structures          |
 | `input/medium_four_agents.txt` | 14×14 | 4      | Four agents in corners converging on centre goal `(7,7)`              |
 | `input/large_sparse.txt`       | 20×30 | 3      | Large grid with sparse rectangular obstacles                          |
