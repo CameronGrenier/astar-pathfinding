@@ -1,6 +1,7 @@
 #include "../include/astar.h"
 #include "../include/heap.h"
 #include <stdlib.h>
+#include <limits.h>
 
 extern int cols;
 extern int rows;
@@ -15,19 +16,40 @@ float manhattan_distance(Coords c1, Coords c2)
 PathNode *a_star(Node *start_node)
 {
   /*
-   * closed_set is a 2D array of chars (0 or 1) which represent if a given node has been visited by the algorithm.
+   * closed_set is a 1D array of chars (0 or 1) which represent if a given node has been visited by the algorithm.
    * Each node is addressable in O(1) by taking the node coordinates and doing closed_set[y * cols + x].
    * We use chars for 0 and 1 rather than ints since chars are 4x more space efficient.
    */
   char *closed_set = (char *)calloc(cols * rows, sizeof(char));
+
+  /*
+   * came_from is a hashmap which maps a given node to its predecessor in the path. This allows us to reconstruct the path
+   * once we find the goal node. Each node is addressable in O(1) by taking the node coordinates and doing came_from[y * cols + x].
+   */
   Node **came_from = (Node **)calloc(cols * rows, sizeof(Node *));
-  if (!closed_set || !came_from)
+
+  /*
+   * g_cost_array is a 1D array of ints which represent the g cost of a given node. This allows us to check if we have found a cheaper path to a node
+   * when we encounter it again in the frontier. Each node is addressable in O(1) by taking the node coordinates and doing g_cost_array[y * cols + x].
+   */
+  int *g_cost_array = (int *)calloc(cols * rows, sizeof(int));
+
+  if (!closed_set || !came_from || !g_cost_array)
   {
     if (closed_set)
       free(closed_set);
     if (came_from)
       free(came_from);
+    if (g_cost_array)
+      free(g_cost_array);
     return NULL;
+  }
+  g_cost_array[start_node->pos.y * cols + start_node->pos.x] = 0; // g cost of start node is 0
+
+  // initialize g_cost_array to all INT_MAX since we haven't found any paths to any nodes yet
+  for (int i = 0; i < cols * rows; i++)
+  {
+    g_cost_array[i] = INT_MAX;
   }
 
   /*
@@ -44,7 +66,9 @@ PathNode *a_star(Node *start_node)
   // while the there is some frontier to process
   while (open_set.size != 0)
   {
-    AStarNode curr = heap_pop(&open_set); // cheapest f cost node to explore
+    AStarNode curr = heap_pop(&open_set);                       // get the node in the frontier with the lowest f cost
+    if (closed_set[curr.node->pos.y * cols + curr.node->pos.x]) // if we have already visited this node, skip it
+      continue;
     // check if current node is goal node build solution path
     if (nodes_equal(curr.node, goal_node))
     {
@@ -72,6 +96,7 @@ PathNode *a_star(Node *start_node)
       heap_free(&open_set);
       free(closed_set);
       free(came_from);
+      free(g_cost_array);
       if (nodes_equal(prev_path_node->node, start_node))
       {
         PathNode *old = prev_path_node;
@@ -81,7 +106,7 @@ PathNode *a_star(Node *start_node)
       return prev_path_node; // head of the linked list
     }
     // current node is not the goal node, so we expand curr
-    closed_set[curr.node->pos.y * cols + curr.node->pos.x] = 1;
+    closed_set[curr.node->pos.y * cols + curr.node->pos.x] = 1; // mark current node as visited
     Node *neighbours[] = {curr.node->up, curr.node->down, curr.node->left, curr.node->right};
     for (int i = 0; i < 4; i++)
     {
@@ -98,23 +123,25 @@ PathNode *a_star(Node *start_node)
       {
         continue;
       }
+      int tentative_g = curr.g + 1; // Normal cost for pathing through an empty cell
       if (shared_map[n->pos.y][n->pos.x].type == AGENT && !nodes_equal(n, goal_node))
       {
-        int g = curr.g + 10; // Add a higher cost for pathing through an agent
-        int f = g + manhattan_distance(n->pos, goal_node->pos);
-        heap_push(&open_set, (AStarNode){n, g, f});
-        came_from[n->pos.y * cols + n->pos.x] = curr.node;
-        continue;
+        tentative_g = curr.g + 2; // Add a higher cost for pathing through an agent
       }
-      int g = curr.g + 1;
-      int f = g + manhattan_distance(n->pos, goal_node->pos);
-      heap_push(&open_set, (AStarNode){n, g, f});
+      if (tentative_g >= g_cost_array[n->pos.y * cols + n->pos.x])
+      {
+        continue; // not a better path
+      }
+      g_cost_array[n->pos.y * cols + n->pos.x] = tentative_g;
+      int f = tentative_g + manhattan_distance(n->pos, goal_node->pos);
+      heap_push(&open_set, (AStarNode){n, tentative_g, f});
       came_from[n->pos.y * cols + n->pos.x] = curr.node;
     }
   }
   heap_free(&open_set);
   free(closed_set);
   free(came_from);
+  free(g_cost_array);
   return NULL; // no solution was found
 }
 
