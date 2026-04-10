@@ -2,13 +2,18 @@
 
 A multi-agent A\* pathfinding simulator built in C with real-time ncurses visualization and POSIX thread-based concurrency. Multiple agents navigate a shared grid toward a common goal, discovering obstacles at runtime, avoiding collisions, and coordinating through zone-based locking.
 
+## Docs
+
+Find the Design Document `Design_Doc.pdf` and the Comparison Report `Comparison_Report.pdf` in the `/docs` directory.
+
 ## Features
 
-- **Interactive ncurses menu** — ASCII art title screen, file picker, and speed selector
+- **Interactive ncurses menu** — ASCII art title screen, file picker, speed selector, and heuristic selector
 - **Real-time grid visualization** — colour-coded terminal rendering updated on every agent move
 - **Dynamic map scaling and scrolling** — automatically scales down large maps to fit the terminal, with arrow key scrolling for maps that are still too large
 - **Random map generation** — generate random maps with configurable dimensions, obstacle density, and agent count
 - **Multiple simulation speeds** — slow, medium, fast, and realtime
+- **A\* heuristic selection** — choose between Manhattan and Euclidean distance heuristics
 - **Multi-agent collision avoidance** — agents detect and wait for each other, then replan
 - **Runtime obstacle discovery** — agents only learn about obstacles when they encounter them
 - **Overlapping zone-based locking** — fine-grained concurrency with deadlock prevention
@@ -54,13 +59,14 @@ The interactive menu presents:
 
 1. **File picker** — lists all `.txt` files in `input/`, sorted alphabetically, plus a custom path option
 2. **Speed selector** — choose from four speed presets (default: medium)
+3. **Heuristic selector** — choose between Manhattan distance and Euclidean distance (default: Manhattan)
 
 Navigate with **Up/Down** arrows and confirm with **Enter**.
 
 ### Run with CLI arguments
 
 ```bash
-./astar <input_file> [-speed <level>]
+./astar <input_file> [-speed <level>] [-heuristic <type>]
 ```
 
 Examples:
@@ -68,7 +74,8 @@ Examples:
 ```bash
 ./astar input/input.txt
 ./astar input/large_dense.txt -speed fast
-./astar input/medium_four_agents.txt -speed realtime
+./astar input/medium_four_agents.txt -speed realtime -heuristic euclidean
+./astar input/small_maze.txt -heuristic manhattan
 ```
 
 ### Speed options
@@ -80,7 +87,14 @@ Examples:
 | `fast`     | 20 ms          | 20 000 µs      |
 | `realtime` | 0 ms           | 0 µs           |
 
-When using CLI arguments, the first run uses the provided file and speed. If you choose **Run again** from the results screen, the interactive menu appears for subsequent runs.
+### Heuristic options
+
+| Name        | Description                            |
+| ----------- | -------------------------------------- |
+| `manhattan` | Manhattan distance (L1 norm) — default |
+| `euclidean` | Euclidean distance (L2 norm)           |
+
+When using CLI arguments, the first run uses the provided file, speed, and heuristic. If you choose **Run again** from the results screen, the interactive menu appears for subsequent runs.
 
 ## Viewing Large Maps
 
@@ -213,7 +227,7 @@ input/            Test input files
 - **Open set** — a `MinHeap` of `AStarNode` structs ordered by `f` cost (g + heuristic)
 - **Closed set** — a flat `char` array indexed by `y * cols + x` for O(1) visited lookups
 - **Came-from map** — a flat `Node*` array indexed the same way, recording predecessor pointers
-- **Heuristic** — Manhattan distance via [`manhattan_distance()`](src/astar.c:10)
+- **Heuristic** — selectable between Manhattan distance ([`manhattan_distance()`](src/astar.c:10)) and Euclidean distance ([`euclidean_distance()`](src/astar.c:14))
 - **Neighbour expansion** — skips `NULL` (boundary), already-visited, `OBSTACLE`, and `AGENT` cells (unless the cell is the goal)
 - **Path reconstruction** — on reaching the goal, traces back through `came_from` to build a linked list of `PathNode` structs. The start node is stripped from the returned path so the first entry is the next cell to move to
 - Returns `NULL` if no path exists
@@ -380,15 +394,17 @@ After all agents reach the goal, the simulation displays a results screen:
 
 ### Unit Tests
 
-Compares agent paths against BFS-optimal shortest paths on 4 hand-crafted maps (1, 2, 3, and 4 agents):
+Compares agent paths against BFS-optimal shortest paths on 4 hand-crafted maps (1, 2, 3, and 4 agents) using both Manhattan and Euclidean heuristics:
 
 ```bash
 make test
 ```
 
+Results are saved to `tests/test_results_manhattan.csv` and `tests/test_results_euclidean.csv`.
+
 ### Scalability Benchmark
 
-Runs 1,600 simulations across random maps (grid sizes 10×10 to 70×70, 1-8 agents, 100 iterations each). Results are saved to `tests/benchmark_results.csv`:
+Runs 1,600 simulations across random maps (grid sizes 10×10 to 70×70, 1-8 agents, 100 iterations each) using both Manhattan and Euclidean heuristics. Results are saved to `tests/benchmark_results_manhattan.csv` and `tests/benchmark_results_euclidean.csv`:
 
 ```bash
 make benchmark

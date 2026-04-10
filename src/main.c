@@ -251,7 +251,7 @@ int main(int argc, char *argv[])
 	char input_file[256] = {0};
 	int use_cli_args = (argc >= 2);
 
-	/* parse CLI speed flag once (if provided) */
+	/* parse CLI speed and heuristic flags once (if provided) */
 	if (use_cli_args)
 	{
 		strncpy(input_file, argv[1], sizeof(input_file) - 1);
@@ -273,7 +273,21 @@ int main(int argc, char *argv[])
 					fprintf(stderr, "Unknown speed '%s'. Use: slow, medium, fast, realtime\n", s);
 					return 1;
 				}
-				break;
+				i++; // skip the speed value
+			}
+			else if (strcmp(argv[i], "-heuristic") == 0)
+			{
+				const char *h = argv[i + 1];
+				if (strcmp(h, "manhattan") == 0)
+					selected_heuristic = MANHATTAN;
+				else if (strcmp(h, "euclidean") == 0)
+					selected_heuristic = EUCLIDEAN;
+				else
+				{
+					fprintf(stderr, "Unknown heuristic '%s'. Use: manhattan, euclidean\n", h);
+					return 1;
+				}
+				i++; // skip the heuristic value
 			}
 		}
 	}
