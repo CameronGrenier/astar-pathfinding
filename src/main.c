@@ -10,6 +10,7 @@
 #include "../include/runner.h"
 #include "../include/cli.h"
 #include "../include/menu.h"
+#include "../include/astar.h"
 
 /* -- globals defined here, extern'd everywhere else ------------------- */
 Node **actual_map;
@@ -21,7 +22,8 @@ int rows, cols;
 int num_agents;
 int num_zones, num_zones_x, num_zones_y;
 int zone_size_x, zone_size_y;
-unsigned int speed_delay = 100000; /* default: medium (100ms per step) */
+unsigned int speed_delay = 100000;						 /* default: medium (100ms per step) */
+enum Heuristic selected_heuristic = MANHATTAN; /* default heuristic */
 
 pthread_mutex_t cli_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cli_cond = PTHREAD_COND_INITIALIZER;
@@ -279,10 +281,12 @@ int main(int argc, char *argv[])
 	/* ---- main loop: menu -> simulation -> results -> prompt --------- */
 	for (;;)
 	{
-		/* get input file and speed — from args on first run, menu otherwise */
+		/* get input file, speed, and heuristic — from args on first run, menu otherwise */
 		if (!use_cli_args || !first_run)
 		{
-			run_menu(input_file, &speed_delay);
+			int heuristic_choice = 0; /* 0=MANHATTAN, 1=EUCLIDEAN */
+			run_menu(input_file, &speed_delay, &heuristic_choice);
+			selected_heuristic = (enum Heuristic)heuristic_choice;
 		}
 		first_run = 0;
 

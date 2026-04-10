@@ -2,6 +2,7 @@
 #include "../include/heap.h"
 #include <stdlib.h>
 #include <limits.h>
+#include <math.h>
 
 extern int cols;
 extern int rows;
@@ -13,7 +14,12 @@ float manhattan_distance(Coords c1, Coords c2)
   return abs(c1.x - c2.x) + abs(c1.y - c2.y);
 }
 
-PathNode *a_star(Node *start_node)
+float euclidean_distance(Coords c1, Coords c2)
+{
+  return sqrt(pow(c1.x - c2.x, 2) + pow(c1.y - c2.y, 2));
+}
+
+PathNode *a_star(Node *start_node, enum Heuristic heuristic)
 {
   /*
    * closed_set is a 1D array of chars (0 or 1) which represent if a given node has been visited by the algorithm.
@@ -133,7 +139,18 @@ PathNode *a_star(Node *start_node)
         continue; // not a better path
       }
       g_cost_array[n->pos.y * cols + n->pos.x] = tentative_g;
-      int f = tentative_g + manhattan_distance(n->pos, goal_node->pos);
+      int f;
+      switch (heuristic)
+      {
+      case MANHATTAN:
+        f = tentative_g + manhattan_distance(n->pos, goal_node->pos);
+        break;
+      case EUCLIDEAN:
+        f = tentative_g + euclidean_distance(n->pos, goal_node->pos);
+        break;
+      default:
+        f = tentative_g + manhattan_distance(n->pos, goal_node->pos);
+      }
       heap_push(&open_set, (AStarNode){n, tentative_g, f});
       came_from[n->pos.y * cols + n->pos.x] = curr.node;
     }

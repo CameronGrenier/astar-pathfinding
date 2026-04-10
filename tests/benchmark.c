@@ -26,6 +26,7 @@
 #include "types.h"
 #include "map.h"
 #include "runner.h"
+#include "astar.h"
 
 /* ── globals required by runner.c, astar.c ───────────────────────────── */
 
@@ -39,6 +40,7 @@ int zone_size_x, zone_size_y;
 int num_zones, num_zones_x, num_zones_y;
 int rows, cols;
 unsigned int speed_delay = 0;
+enum Heuristic selected_heuristic = MANHATTAN;
 
 /* CLI sync — runner.c signals these but no CLI thread listens */
 pthread_mutex_t cli_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -628,136 +630,159 @@ int main(void)
   printf("  Obstacle %%:   %.0f%%\n", OBSTACLE_DENSITY * 100);
   printf("========================================================\n\n");
 
-  /* open CSV file */
-  FILE *csv = fopen(CSV_FILE_PATH, "w");
-  if (!csv)
-  {
-    fprintf(stderr, "ERROR: cannot open %s for writing\n", CSV_FILE_PATH);
-    return 1;
-  }
-  fprintf(csv, "grid_size,num_agents,avg_time_ms,min_time_ms,max_time_ms,"
-               "avg_actual_steps,avg_optimal_steps,avg_overhead,success_rate\n");
+  /* benchmark both heuristics */
+  const char *heuristic_names[] = {"Manhattan", "Euclidean"};
+  const enum Heuristic heuristics[] = {MANHATTAN, EUCLIDEAN};
 
-  /* print header for stdout table */
-  printf("%-10s %-8s %-12s %-12s %-12s %-14s %-14s %-12s %-10s\n",
-         "Grid", "Agents", "Avg ms", "Min ms", "Max ms",
-         "Avg Actual", "Avg Optimal", "Avg Overhead", "Success %");
-  printf("---------- -------- ------------ ------------ ------------ "
-         "-------------- -------------- ------------ ----------\n");
-
-  for (int gi = 0; gi < NUM_GRID_SIZES; gi++)
+  for (int h = 0; h < 2; h++)
   {
-    for (int ai = 0; ai < NUM_AGENT_COUNTS; ai++)
+    selected_heuristic = heuristics[h];
+
+    /* generate CSV filename for this heuristic */
+    char csv_filename[256];
+    snprintf(csv_filename, sizeof(csv_filename),
+             "tests/benchmark_results_%s.csv",
+             heuristic_names[h]);
+
+    printf("\n========================================================\n");
+    printf("  Running benchmark with %s heuristic\n", heuristic_names[h]);
+    printf("========================================================\n\n");
+
+    /* open CSV file for this heuristic */
+    FILE *csv = fopen(csv_filename, "w");
+    if (!csv)
     {
-      int grid_size = GRID_SIZES[gi];
-      int n_agents = AGENT_COUNTS[ai];
+      fprintf(stderr, "ERROR: cannot open %s for writing\n", csv_filename);
+      return 1;
+    }
+    fprintf(csv, "grid_size,num_agents,avg_time_ms,min_time_ms,max_time_ms,"
+                 "avg_actual_steps,avg_optimal_steps,avg_overhead,success_rate\n");
 
-      /* skip configurations where agents >= cells */
-      if (n_agents >= grid_size * grid_size)
+    /* print header for stdout table */
+    printf("%-10s %-8s %-12s %-12s %-12s %-14s %-14s %-12s %-10s\n",
+           "Grid", "Agents", "Avg ms", "Min ms", "Max ms",
+           "Avg Actual", "Avg Optimal", "Avg Overhead", "Success %");
+    printf("---------- -------- ------------ ------------ ------------ "
+           "-------------- -------------- ------------ ----------\n");
+
+    for (int gi = 0; gi < NUM_GRID_SIZES; gi++)
+    {
+      for (int ai = 0; ai < NUM_AGENT_COUNTS; ai++)
       {
-        printf("%-10d %-8d SKIPPED (too many agents for grid)\n",
-               grid_size, n_agents);
-        continue;
-      }
+        int grid_size = GRID_SIZES[gi];
+        int n_agents = AGENT_COUNTS[ai];
 
-      double sum_time = 0.0;
-      double min_time = 1e12;
-      double max_time = 0.0;
-      double sum_actual = 0.0;
-      double sum_optimal = 0.0;
-      double sum_overhead = 0.0;
-      int successes = 0;
-      int valid_runs = 0;
-
-      for (int iter = 0; iter < NUM_ITERATIONS; iter++)
-      {
-        /* seed each iteration with different value */
-        srand((unsigned int)time(NULL) ^ (unsigned int)((gi * 1000 + ai * 100 + iter) * 31));
-
-        /* generate a random solvable map */
-        if (!generate_random_map(grid_size, grid_size, n_agents))
+        /* skip configurations where agents >= cells */
+        if (n_agents >= grid_size * grid_size)
         {
-          fprintf(stderr, "WARNING: failed to generate map for "
-                          "%dx%d with %d agents (iter %d)\n",
-                  grid_size, grid_size, n_agents, iter);
+          printf("%-10d %-8d SKIPPED (too many agents for grid)\n",
+                 grid_size, n_agents);
           continue;
         }
 
-        /* run simulation */
-        RunResult rr = run_simulation(TEMP_FILE_PATH);
-        valid_runs++;
+        double sum_time = 0.0;
+        double min_time = 1e12;
+        double max_time = 0.0;
+        double sum_actual = 0.0;
+        double sum_optimal = 0.0;
+        double sum_overhead = 0.0;
+        int successes = 0;
+        int valid_runs = 0;
 
-        sum_time += rr.time_ms;
-        if (rr.time_ms < min_time)
-          min_time = rr.time_ms;
-        if (rr.time_ms > max_time)
-          max_time = rr.time_ms;
-
-        if (rr.all_reached_goal)
+        for (int iter = 0; iter < NUM_ITERATIONS; iter++)
         {
-          successes++;
-          sum_actual += rr.total_actual_steps;
-          sum_optimal += rr.total_optimal_steps;
-          sum_overhead += rr.overhead_ratio;
+          /* seed each iteration with different value */
+          srand((unsigned int)time(NULL) ^ (unsigned int)((gi * 1000 + ai * 100 + iter) * 31));
+
+          /* generate a random solvable map */
+          if (!generate_random_map(grid_size, grid_size, n_agents))
+          {
+            fprintf(stderr, "WARNING: failed to generate map for "
+                            "%dx%d with %d agents (iter %d)\n",
+                    grid_size, grid_size, n_agents, iter);
+            continue;
+          }
+
+          /* run simulation */
+          RunResult rr = run_simulation(TEMP_FILE_PATH);
+          valid_runs++;
+
+          sum_time += rr.time_ms;
+          if (rr.time_ms < min_time)
+            min_time = rr.time_ms;
+          if (rr.time_ms > max_time)
+            max_time = rr.time_ms;
+
+          if (rr.all_reached_goal)
+          {
+            successes++;
+            sum_actual += rr.total_actual_steps;
+            sum_optimal += rr.total_optimal_steps;
+            sum_overhead += rr.overhead_ratio;
+          }
         }
-      }
 
-      /* compute averages */
-      BenchmarkResult br;
-      if (valid_runs > 0)
-      {
-        br.avg_time_ms = sum_time / valid_runs;
-        br.min_time_ms = min_time;
-        br.max_time_ms = max_time;
-      }
-      else
-      {
-        br.avg_time_ms = 0.0;
-        br.min_time_ms = 0.0;
-        br.max_time_ms = 0.0;
-      }
+        /* compute averages */
+        BenchmarkResult br;
+        if (valid_runs > 0)
+        {
+          br.avg_time_ms = sum_time / valid_runs;
+          br.min_time_ms = min_time;
+          br.max_time_ms = max_time;
+        }
+        else
+        {
+          br.avg_time_ms = 0.0;
+          br.min_time_ms = 0.0;
+          br.max_time_ms = 0.0;
+        }
 
-      if (successes > 0)
-      {
-        br.avg_actual_steps = sum_actual / successes;
-        br.avg_optimal_steps = sum_optimal / successes;
-        br.avg_overhead = sum_overhead / successes;
+        if (successes > 0)
+        {
+          br.avg_actual_steps = sum_actual / successes;
+          br.avg_optimal_steps = sum_optimal / successes;
+          br.avg_overhead = sum_overhead / successes;
+        }
+        else
+        {
+          br.avg_actual_steps = 0.0;
+          br.avg_optimal_steps = 0.0;
+          br.avg_overhead = 0.0;
+        }
+
+        br.success_rate = valid_runs > 0
+                              ? (double)successes / (double)valid_runs * 100.0
+                              : 0.0;
+
+        /* print to stdout */
+        printf("%-10d %-8d %-12.2f %-12.2f %-12.2f %-14.1f %-14.1f %-12.2f %-10.1f\n",
+               grid_size, n_agents,
+               br.avg_time_ms, br.min_time_ms, br.max_time_ms,
+               br.avg_actual_steps, br.avg_optimal_steps,
+               br.avg_overhead, br.success_rate);
+
+        /* write CSV row */
+        fprintf(csv, "%d,%d,%.2f,%.2f,%.2f,%.1f,%.1f,%.2f,%.1f\n",
+                grid_size, n_agents,
+                br.avg_time_ms, br.min_time_ms, br.max_time_ms,
+                br.avg_actual_steps, br.avg_optimal_steps,
+                br.avg_overhead, br.success_rate);
+        fflush(csv);
       }
-      else
-      {
-        br.avg_actual_steps = 0.0;
-        br.avg_optimal_steps = 0.0;
-        br.avg_overhead = 0.0;
-      }
-
-      br.success_rate = valid_runs > 0
-                            ? (double)successes / (double)valid_runs * 100.0
-                            : 0.0;
-
-      /* print to stdout */
-      printf("%-10d %-8d %-12.2f %-12.2f %-12.2f %-14.1f %-14.1f %-12.2f %-10.1f\n",
-             grid_size, n_agents,
-             br.avg_time_ms, br.min_time_ms, br.max_time_ms,
-             br.avg_actual_steps, br.avg_optimal_steps,
-             br.avg_overhead, br.success_rate);
-
-      /* write CSV row */
-      fprintf(csv, "%d,%d,%.2f,%.2f,%.2f,%.1f,%.1f,%.2f,%.1f\n",
-              grid_size, n_agents,
-              br.avg_time_ms, br.min_time_ms, br.max_time_ms,
-              br.avg_actual_steps, br.avg_optimal_steps,
-              br.avg_overhead, br.success_rate);
-      fflush(csv);
     }
-  }
 
-  fclose(csv);
+    fclose(csv);
+
+    printf("\n========================================================\n");
+    printf("  Benchmark complete. Results saved to %s\n", csv_filename);
+    printf("========================================================\n");
+  }
 
   /* clean up temp file */
   remove(TEMP_FILE_PATH);
 
   printf("\n========================================================\n");
-  printf("  Benchmark complete. Results saved to %s\n", CSV_FILE_PATH);
+  printf("  All heuristics benchmarked. See CSV files for details.\n");
   printf("========================================================\n");
 
   return 0;

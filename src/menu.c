@@ -324,6 +324,70 @@ static void pick_file(char *out)
   }
 }
 
+/* -- heuristic picker -------------------------------------------------- */
+static void pick_heuristic(int *out)
+{
+  static const char *labels[] = {
+      "Manhattan distance",
+      "Euclidean distance",
+  };
+  static const int heuristics[] = {0, 1}; /* 0=MANHATTAN, 1=EUCLIDEAN */
+  const int N = 2;
+  int sel = 0;
+
+  const char *header = "Select A* heuristic  (Up/Down to navigate, Enter to confirm)";
+  int box_w = 52;
+  int box_h = N + 4;
+  int box_y = TITLE_LINES + 4;
+  if (box_y + box_h >= LINES)
+    box_y = (LINES - box_h) / 2;
+  int box_x = (COLS - box_w) / 2;
+
+  while (1)
+  {
+    clear();
+    draw_title(1);
+    draw_box(box_y, box_x, box_h, box_w);
+
+    attron(COLOR_PAIR(C_DIM));
+    mvprintw(box_y, box_x + 2, " %s ", header);
+    attroff(COLOR_PAIR(C_DIM));
+
+    for (int i = 0; i < N; i++)
+    {
+      int row = box_y + 2 + i;
+      if (i == sel)
+      {
+        attron(COLOR_PAIR(C_SEL) | A_BOLD);
+        mvprintw(row, box_x + 2, "  >  %-40s", labels[i]);
+        attroff(COLOR_PAIR(C_SEL) | A_BOLD);
+      }
+      else
+      {
+        attron(COLOR_PAIR(C_NORMAL));
+        mvprintw(row, box_x + 2, "     %-40s", labels[i]);
+        attroff(COLOR_PAIR(C_NORMAL));
+      }
+    }
+    refresh();
+
+    int ch = getch();
+    if (ch == KEY_UP)
+    {
+      sel = (sel - 1 + N) % N;
+    }
+    else if (ch == KEY_DOWN)
+    {
+      sel = (sel + 1) % N;
+    }
+    else if (ch == '\n' || ch == KEY_ENTER)
+    {
+      *out = heuristics[sel];
+      return;
+    }
+  }
+}
+
 /* -- speed picker ------------------------------------------------------ */
 static void pick_speed(unsigned int *out)
 {
@@ -391,7 +455,7 @@ static void pick_speed(unsigned int *out)
 }
 
 /* -- public entry point ------------------------------------------------ */
-void run_menu(char *filepath_out, unsigned int *speed_out)
+void run_menu(char *filepath_out, unsigned int *speed_out, int *heuristic_out)
 {
   initscr();
   cbreak();
@@ -410,6 +474,7 @@ void run_menu(char *filepath_out, unsigned int *speed_out)
 
   pick_file(filepath_out);
   pick_speed(speed_out);
+  pick_heuristic(heuristic_out);
 
   endwin();
 }

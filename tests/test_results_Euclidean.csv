@@ -1,0 +1,5 @@
+test_file,agents,optimal_steps,actual_steps,overhead_ratio,all_reached_goal
+tests/test_1_agent.txt,1,14,14,1.00,YES
+tests/test_2_agents.txt,2,27,27,1.00,YES
+tests/test_3_agents.txt,3,46,46,1.00,YES
+tests/test_4_agents.txt,4,52,52,1.00,YES

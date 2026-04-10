@@ -11,6 +11,7 @@ extern Node *goal_node;
 extern int zone_size_x, zone_size_y, num_zones_x, num_zones_y, num_zones;
 extern Zone *zones;
 extern unsigned int speed_delay;
+extern enum Heuristic selected_heuristic;
 
 extern pthread_mutex_t map_changed_mutex;
 extern pthread_cond_t map_changed_cond;
@@ -165,7 +166,7 @@ void *runner(void *arg)
 {
   Agent *agent = (Agent *)arg;
   Node *current_node = agent->start_node;
-  PathNode *next_moves = a_star(current_node);
+  PathNode *next_moves = a_star(current_node, selected_heuristic);
 
   /* record starting position */
   append_path(agent, current_node->pos);
@@ -187,7 +188,7 @@ void *runner(void *arg)
       pthread_mutex_lock(&map_changed_mutex);
       pthread_cond_timedwait(&map_changed_cond, &map_changed_mutex, &ts);
       pthread_mutex_unlock(&map_changed_mutex);
-      next_moves = a_star(current_node);
+      next_moves = a_star(current_node, selected_heuristic);
       continue;
     }
 
@@ -236,7 +237,7 @@ void *runner(void *arg)
         pthread_cond_timedwait(&wait_zone->cond, &wait_zone->mutex, &ts);
         pthread_mutex_unlock(&wait_zone->mutex);
         free_path(next_moves);
-        next_moves = a_star(current_node);
+        next_moves = a_star(current_node, selected_heuristic);
         continue;
       }
 
@@ -271,7 +272,7 @@ void *runner(void *arg)
       {
         unlock_zones(locked, nlocked);
         free_path(next_moves);
-        next_moves = a_star(current_node);
+        next_moves = a_star(current_node, selected_heuristic);
       }
       else if (next_move->node->type == OBSTACLE)
       {
@@ -283,7 +284,7 @@ void *runner(void *arg)
         pthread_mutex_unlock(&map_changed_mutex);
 
         free_path(next_moves);
-        next_moves = a_star(current_node);
+        next_moves = a_star(current_node, selected_heuristic);
       }
       else
       {

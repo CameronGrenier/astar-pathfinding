@@ -24,6 +24,12 @@ typedef struct PathNode
   struct PathNode *next; /**< Pointer to the next node, forming the linked list */
 } PathNode;
 
+enum Heuristic
+{
+  MANHATTAN,
+  EUCLIDEAN
+};
+
 /**
  * @brief Calculates the Manhattan Distance between two 2D coordinates
  *
@@ -34,12 +40,22 @@ typedef struct PathNode
 float manhattan_distance(Coords c1, Coords c2);
 
 /**
+ * @brief Calculates the Euclidean Distance between two 2D coordinates
+ *
+ * @param c1 One coordinate object
+ * @param c2 Second coordinate object
+ * @return Euclidean Distance between point c1 and c2, as a float.
+ */
+float euclidean_distance(Coords c1, Coords c2);
+
+/**
  * @brief Finds the optimal path from start_node to goal_node using A*.
  *
  * @param start_node Pointer to the node to start pathfinding from
+ * @param heuristic The heuristic to use (MANHATTAN or EUCLIDEAN)
  * @return The solution path as a pointer to a linked list of PathNodes (wrapper of Node struct).
  */
-PathNode *a_star(Node *start_node);
+PathNode *a_star(Node *start_node, enum Heuristic heuristic);
 
 /**
  * @brief Frees all PathNodes in a linked list path.

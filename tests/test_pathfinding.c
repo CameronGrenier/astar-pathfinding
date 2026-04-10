@@ -20,6 +20,7 @@
 #include "types.h"
 #include "map.h"
 #include "runner.h"
+#include "astar.h"
 
 /* ── globals required by runner.c, astar.c ───────────────────────────── */
 
@@ -33,6 +34,7 @@ int zone_size_x, zone_size_y;
 int num_zones, num_zones_x, num_zones_y;
 int rows, cols;
 unsigned int speed_delay = 0; /* realtime — no sleeps */
+enum Heuristic selected_heuristic = MANHATTAN;
 
 /* CLI sync — runner.c signals these but no CLI thread listens */
 pthread_mutex_t cli_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -346,44 +348,100 @@ int main(void)
   printf("    A* Multi-Agent Pathfinding — Test Suite\n");
   printf("========================================================\n");
 
+  /* test both heuristics */
+  const char *heuristic_names[] = {"Manhattan", "Euclidean"};
+  const enum Heuristic heuristics[] = {MANHATTAN, EUCLIDEAN};
+
   int all_passed = 1;
-  TestResult results[4];
 
-  for (int t = 0; t < num_tests; t++)
+  for (int h = 0; h < 2; h++)
   {
-    printf("\nRunning test %d/%d: %s ...\n",
-           t + 1, num_tests, test_files[t]);
-    results[t] = run_test(test_files[t]);
-    print_report(&results[t]);
+    selected_heuristic = heuristics[h];
 
-    if (!results[t].all_reached_goal)
+    printf("\n========================================================\n");
+    printf("  Testing with %s heuristic\n", heuristic_names[h]);
+    printf("========================================================\n");
+
+    /* generate CSV filename for this heuristic */
+    char csv_filename[256];
+    snprintf(csv_filename, sizeof(csv_filename),
+             "tests/test_results_%s.csv",
+             heuristic_names[h]);
+
+    /* open CSV file for this heuristic */
+    FILE *csv = fopen(csv_filename, "w");
+    if (!csv)
+    {
+      fprintf(stderr, "ERROR: cannot open %s for writing\n", csv_filename);
+      return 1;
+    }
+    fprintf(csv, "test_file,agents,optimal_steps,actual_steps,overhead_ratio,all_reached_goal\n");
+
+    TestResult results[4];
+    int heuristic_passed = 1;
+
+    for (int t = 0; t < num_tests; t++)
+    {
+      printf("\nRunning test %d/%d: %s ...\n",
+             t + 1, num_tests, test_files[t]);
+      results[t] = run_test(test_files[t]);
+      print_report(&results[t]);
+
+      if (!results[t].all_reached_goal)
+        heuristic_passed = 0;
+
+      /* write CSV row for each test */
+      if (results[t].agent_count > 0)
+      {
+        int total_optimal = 0;
+        int total_actual = 0;
+        for (int i = 0; i < results[t].agent_count; i++)
+        {
+          total_optimal += results[t].optimal[i];
+          total_actual += results[t].actual[i];
+        }
+        double overhead = total_optimal > 0
+                              ? (double)total_actual / (double)total_optimal
+                              : 0.0;
+        fprintf(csv, "%s,%d,%d,%d,%.2f,%s\n",
+                test_files[t],
+                results[t].agent_count,
+                total_optimal,
+                total_actual,
+                overhead,
+                results[t].all_reached_goal ? "YES" : "NO");
+      }
+    }
+
+    fclose(csv);
+
+    printf("\n========================================================\n");
+    printf("  %s heuristic test results saved to %s\n",
+           heuristic_names[h], csv_filename);
+    printf("========================================================\n");
+
+    if (!heuristic_passed)
       all_passed = 0;
+
+    /* free result arrays */
+    for (int t = 0; t < num_tests; t++)
+    {
+      free(results[t].optimal);
+      free(results[t].actual);
+    }
   }
 
   /* ── summary ─────────────────────────────────────────────────── */
   printf("\n");
   printf("========================================================\n");
-  printf("                    SUMMARY\n");
+  printf("                    FINAL SUMMARY\n");
   printf("========================================================\n");
-
-  for (int t = 0; t < num_tests; t++)
-  {
-    printf("  %-35s  %s\n",
-           results[t].filename,
-           results[t].all_reached_goal ? "PASS" : "FAIL");
-  }
-
-  printf("--------------------------------------------------------\n");
-  printf("  Overall: %s\n",
+  printf("  All tests: %s\n",
          all_passed ? "ALL TESTS PASSED" : "SOME TESTS FAILED");
+  printf("  CSV files generated:\n");
+  printf("    - tests/test_results_Manhattan.csv\n");
+  printf("    - tests/test_results_Euclidean.csv\n");
   printf("========================================================\n");
-
-  /* free result arrays */
-  for (int t = 0; t < num_tests; t++)
-  {
-    free(results[t].optimal);
-    free(results[t].actual);
-  }
 
   return all_passed ? 0 : 1;
 }
